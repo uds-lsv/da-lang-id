@@ -1,1 +1,1 @@
-PyTorch Code for the paper: Cross-Domain Adaptation of Spoken Language Identification for RelatedLanguages: The Curious Case of Slavic Languages
+### PyTorch Code for the paper: Cross-Domain Adaptation of Spoken Language Identification for Related Languages: The Curious Case of Slavic Languages
