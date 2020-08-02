@@ -1,0 +1,50 @@
+source_data_dir: '/data/SBC_MFCC_NORM_1_13/'
+target_data_dir: '/data/GP_MFCC_NORM_1_13/'
+source_speech_metadata: '/SLR-GP/metadata/sbc_metadata_slavic.csv'
+target_speech_metadata: '/SLR-GP/metadata/gp_metadata_slavic.csv'
+model_state_file: '21042020_1800'
+model_save_dir: 'in_progress_models_x4/'
+source_language_set: 'BUL HRV CZE POL RUS UKR'
+target_language_set: 'BUL HRV CZE POL RUS UKR'
+seed: 1337
+input_signal_params:
+    feature_type: 'MFCC'
+    experiment_type: 'domain_sbc2gp'
+    max_num_frames: 384
+    num_frames: 300
+    sampling_rate: 16000
+    sample_segment: True
+    start_index: 0
+    end_index: 13
+model_arch:
+    nn_model: ConvNet_DA
+    feature_dim: 13
+    num_classes: 6
+    bottleneck: True
+    bottleneck_size: 512
+    output_dim: 512
+    frame_dropout: True
+    feature_dropout: False
+    signal_dropout_prob: 0.0
+    num_channels:
+       - 128
+       - 256
+       - 512
+    filter_sizes:
+       - 5
+       - 10
+       - 10
+    stride_steps:
+       - 1
+       - 1
+       - 1
+    pooling_type: 'max'
+training_hyperparams:
+    learning_rate: 0.001
+    batch_size: 256
+    num_epochs: 100
+    early_stopping_criteria: 50
+cuda: True
+catch_keyboard_interrupt: True
+reload_from_files: False
+expand_filepaths_to_save_dir: True
