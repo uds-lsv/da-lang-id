@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
 
 import os
 import yaml
@@ -24,10 +22,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from nn_speech_models import *
-
-
-# In[2]:
-
 
 # Training Routine
 # Helper functions
@@ -103,7 +97,7 @@ def compute_binary_accuracy(y_pred, y_target):
 
 def get_predictions(y_pred, y_target):
     """Return indecies of predictions. """
-    
+
     _, y_pred_indices = y_pred.max(dim=1)
 
     pred_labels = y_pred_indices.tolist()
@@ -121,25 +115,13 @@ def handle_dirs(dirpath):
     if not os.path.exists(dirpath):
         os.makedirs(dirpath)
 
-
-# In[3]:
-
-
 # obtain user input
 if len(sys.argv) != 2:
 	sys.exit("\nUsage: " + sys.argv[0] + " <config YAML file>\n")
 
 config_file_pah = sys.argv[1] #'/LANG-ID-X/config_1.yml'
 
-
-# In[5]:
-
-
 config_args = yaml.safe_load(open(config_file_pah))
-
-
-# In[6]:
-
 
 
 config_args['model_id'] = '_'.join(str(ip) for ip in
@@ -164,9 +146,6 @@ if config_args['expand_filepaths_to_save_dir']:
     print("\t{}".format(config_args['model_state_file']))
 
 
-# In[8]:
-
-
 # Check CUDA
 if not torch.cuda.is_available():
     config_args['cuda'] = False
@@ -181,10 +160,6 @@ set_seed_everywhere(config_args['seed'], config_args['cuda'])
 # handle dirs
 handle_dirs(config_args['model_save_dir'])
 
-
-# In[9]:
-
-
 ##### HERE IT ALL STARTS ...
 # source vectorizer ...
 source_speech_df = pd.read_csv(config_args['source_speech_metadata'],
@@ -198,14 +173,7 @@ source_speech_df = source_speech_df[(source_speech_df.duration!=0)]
 source_speech_df = source_speech_df[(source_speech_df['language'].isin(source_label_set))]
 
 
-# In[10]:
-
-
 len(source_speech_df), source_label_set
-
-
-# In[11]:
-
 
 # source vectorizer ...
 target_speech_df = pd.read_csv(config_args['target_speech_metadata'],
@@ -218,14 +186,7 @@ target_speech_df = target_speech_df[(target_speech_df.duration!=0)]
 
 target_speech_df = target_speech_df[(target_speech_df['language'].isin(target_label_set))]
 
-
-# In[12]:
-
-
 len(target_speech_df), target_label_set
-
-
-# In[13]:
 
 
 source_speech_vectorizer = LID_Vectorizer(
@@ -242,14 +203,12 @@ source_speech_vectorizer = LID_Vectorizer(
 print(source_speech_vectorizer.index2lang)
 
 
-# In[14]:
-
 
 target_speech_vectorizer = LID_Vectorizer(
     data_dir=config_args['target_data_dir'],
     speech_df=target_speech_df,
     feature_type= config_args['input_signal_params']['feature_type'],
-    label_set=config_args['target_language_set'].split(), 
+    label_set=config_args['target_language_set'].split(),
     max_num_frames=config_args['input_signal_params']['max_num_frames'],
     num_frames=config_args['input_signal_params']['num_frames'],
     feature_dim=config_args['model_arch']['feature_dim'],
@@ -259,15 +218,9 @@ target_speech_vectorizer = LID_Vectorizer(
 print(target_speech_vectorizer.index2lang)
 
 
-# In[15]:
-
-
 # data loaders ....
 source_speech_dataset = LID_Dataset(source_speech_df, source_speech_vectorizer)
 target_speech_dataset = LID_Dataset(target_speech_df, target_speech_vectorizer)
-
-
-# In[16]:
 
 
 if config_args['model_arch']['nn_model'] == 'ConvNet_DA':
@@ -287,21 +240,13 @@ if config_args['model_arch']['nn_model'] == 'ConvNet_DA':
     )
 
 
-# In[17]:
-
-
-# test model 
+# test model
 x_in = torch.rand(1, 13, 384)
 nn_LID_model_DA.forward(x_in)
 
 
-# In[18]:
-
-
 print(nn_LID_model_DA)
 
-
-# In[25]:
 
 
 loss_func_cls = nn.CrossEntropyLoss()
@@ -316,11 +261,8 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
 train_state = make_train_state(config_args)
 
 # this line was added due to RunTimeError
-# NOTE: uncomment this 
+# NOTE: uncomment this
 nn_LID_model_DA.cuda()
-
-
-# In[29]:
 
 
 src_val_balanced_acc_scores = []
@@ -332,14 +274,14 @@ batch_size = config_args['training_hyperparams']['batch_size']
 try:
     print('Training started.')
     for epoch_index in range(num_epochs):
-        
-        
+
+
         ##### TRAINING SECTION
         train_state['epoch_index'] = epoch_index
-        
+
         # Iterate over training dataset
         # setup: batch generator, set loss and acc to 0, set train mode on
-        source_speech_dataset.set_mode('TRA') 
+        source_speech_dataset.set_mode('TRA')
         source_total_batches = source_speech_dataset.get_num_batches(batch_size)
 
         source_batch_generator = generate_batches(
@@ -347,8 +289,8 @@ try:
             batch_size=batch_size,
             device=config_args['device']
         )
-        
-        target_speech_dataset.set_mode('TRA') 
+
+        target_speech_dataset.set_mode('TRA')
         target_total_batches = target_speech_dataset.get_num_batches(batch_size)
 
         target_batch_generator = generate_batches(
@@ -356,14 +298,14 @@ try:
             batch_size=batch_size,
             device=config_args['device']
         )
-        
-        
+
+
         max_batches = min(source_total_batches, target_total_batches)
         #print(source_total_batches, target_total_batches)
-        
+
         running_cls_loss = 0.0
         running_dmn_loss = 0.0
-        
+
         running_cls_acc = 0.0
         running_src_dmn_acc = 0.0
         running_tgt_dmn_acc = 0.0
@@ -377,10 +319,10 @@ try:
             # --------------------------------------
             # step 1. zero the gradients
             optimizer.zero_grad()
-            
+
             # step 2. training progress and GRL lambda
             p = float(batch_index + epoch_index * max_batches) / (num_epochs * max_batches)
-            _lambda = 2. / (1. + np.exp(-5 * p)) - 1 
+            _lambda = 2. / (1. + np.exp(-5 * p)) - 1
 
 
             # step 3. forward pass and compute loss on source domain
@@ -389,63 +331,63 @@ try:
             src_cls_preds, src_dmn_preds = nn_LID_model_DA(x_in=src_batch_dict['x_data'], grl_lambda=_lambda)
 
             loss_src_cls = loss_func_cls(src_cls_preds, src_cls_trues)
-            
+
             #print(src_dmn_preds.shape, src_dmn_trues.shape)
             loss_src_dmn = loss_func_dmn(src_dmn_preds, src_dmn_trues)
-            
+
             # step 4. forward pass and compute loss on target domain
             tgt_dmn_trues = torch.ones(batch_size, dtype=torch.long, device=config_args['device']) # generate source domain labels
             _, tgt_dmn_preds = nn_LID_model_DA(x_in=tgt_batch_dict['x_data'], grl_lambda=_lambda)
 
             loss_tgt_dmn = loss_func_dmn(tgt_dmn_preds, tgt_dmn_trues)
-            
-            # step 5. add different losses to one var 
+
+            # step 5. add different losses to one var
             loss = loss_src_cls + loss_src_dmn + loss_tgt_dmn
-    
+
             # step 4. use loss to produce gradients
             loss.backward()
 
             # step 5. use optimizer to take gradient step
             optimizer.step()
-            
-            # step 6. compute different running losses                     
+
+            # step 6. compute different running losses
             cls_loss = loss_src_cls.item()
             running_cls_loss += (cls_loss - running_cls_loss) / (batch_index + 1)
-            
+
             dmn_loss = loss_src_dmn.item() + loss_tgt_dmn.item()
             running_dmn_loss += (dmn_loss - running_dmn_loss) / (batch_index + 1)
 
             # step 7. compute running source cls accuracy
             src_cls_acc = compute_accuracy(src_cls_preds, src_cls_trues)
             running_cls_acc += (src_cls_acc - running_cls_acc) / (batch_index + 1)
-            
+
             # step 8. compute running source domain prediction accuracy
             src_dmn_acc = compute_accuracy(src_dmn_preds, src_dmn_trues)
             running_src_dmn_acc += (src_dmn_acc - running_src_dmn_acc) / (batch_index + 1)
-            
+
             # step 9. compute running source domain prediction accuracy
             tgt_dmn_acc = compute_accuracy(tgt_dmn_preds, tgt_dmn_trues)
             running_tgt_dmn_acc += (tgt_dmn_acc - running_tgt_dmn_acc) / (batch_index + 1)
-            
+
             # print summary
             print(f"{config_args['model_id']} " # {config_args['model_id']}
                 f"Train Ep [{epoch_index + 1:>2}/{num_epochs}][{batch_index + 1:>3}/{max_batches}] "
                 f"CLS L: {running_cls_loss:>1.5f} "
                 f"DP L: {running_dmn_loss:>1.5f} "
                 f"CLS ACC: {running_cls_acc:>3.2f} "
-                f"S-DP ACC: {running_src_dmn_acc:>3.2f} " 
-                f"T-DP ACC: {running_tgt_dmn_acc:>3.2f} "   
-                f"l: {_lambda:.3f}"  
+                f"S-DP ACC: {running_src_dmn_acc:>3.2f} "
+                f"T-DP ACC: {running_tgt_dmn_acc:>3.2f} "
+                f"l: {_lambda:.3f}"
                 )
 
 
         train_state['train_loss'].append(running_cls_loss)
         train_state['train_acc'].append(running_cls_acc)
-    
+
         ##### VALIDATION SECTION
         # Iterate over val dataset
         # setup: batch generator, set loss and acc to 0, set val  mode on
-        source_speech_dataset.set_mode('DEV') 
+        source_speech_dataset.set_mode('DEV')
         source_total_batches = source_speech_dataset.get_num_batches(batch_size)
 
         source_batch_generator = generate_batches(
@@ -453,8 +395,8 @@ try:
             batch_size=batch_size,
             device=config_args['device']
         )
-        
-        target_speech_dataset.set_mode('DEV') 
+
+        target_speech_dataset.set_mode('DEV')
         target_total_batches = target_speech_dataset.get_num_batches(batch_size)
 
         target_batch_generator = generate_batches(
@@ -462,14 +404,14 @@ try:
             batch_size=batch_size,
             device=config_args['device']
         )
-        
-        
+
+
         max_batches = min(source_total_batches, target_total_batches)
         #print(source_total_batches, target_total_batches)
-        
+
         running_cls_loss = 0.0
         running_dmn_loss = 0.0
-        
+
         running_cls_acc = 0.0
         running_src_dmn_acc = 0.0
         running_tgt_dmn_acc = 0.0
@@ -481,7 +423,7 @@ try:
         y_tgt_true, y_tgt_pred = [], []
 
         for batch_index, (src_batch_dict, tgt_batch_dict) in enumerate(zip(source_batch_generator, target_batch_generator)):
-    
+
             # step 1. forward pass and compute loss on source domain
             src_dmn_trues = torch.zeros(batch_size, dtype=torch.long, device=config_args['device']) # generate source domain labels
             src_cls_trues = src_batch_dict['y_target']
@@ -489,45 +431,45 @@ try:
 
             loss_src_cls = loss_func_cls(src_cls_preds, src_cls_trues)
             loss_src_dmn = loss_func_dmn(src_dmn_preds, src_dmn_trues)
-            
+
             # step 2. forward pass and compute loss on target domain
             tgt_dmn_trues = torch.ones(batch_size, dtype=torch.long, device=config_args['device']) # generate source domain labels
             tgt_cls_trues = tgt_batch_dict['y_target']
             tgt_cls_preds, tgt_dmn_preds = nn_LID_model_DA(x_in=tgt_batch_dict['x_data'])
 
             loss_tgt_dmn = loss_func_dmn(tgt_dmn_preds, tgt_dmn_trues)
-            
+
             # step 3. compute overall loss
             loss = loss_src_cls + loss_src_dmn + loss_tgt_dmn
-            
-            # step 6. compute different running losses                     
+
+            # step 6. compute different running losses
             cls_loss = loss_src_cls.item()
             running_cls_loss += (cls_loss - running_cls_loss) / (batch_index + 1)
-            
+
             dmn_loss = loss_src_dmn.item() + loss_tgt_dmn.item()
             running_dmn_loss += (dmn_loss - running_dmn_loss) / (batch_index + 1)
 
             # step 7. compute running source cls accuracy
             src_cls_acc = compute_accuracy(src_cls_preds, src_cls_trues)
             running_cls_acc += (src_cls_acc - running_cls_acc) / (batch_index + 1)
-            
+
             # step 8. compute running source domain prediction accuracy
             src_dmn_acc = compute_accuracy(src_dmn_preds, src_dmn_trues)
             running_src_dmn_acc += (src_dmn_acc - running_src_dmn_acc) / (batch_index + 1)
-            
+
             # step 9. compute running source domain prediction accuracy
             tgt_dmn_acc = compute_accuracy(tgt_dmn_preds, tgt_dmn_trues)
             running_tgt_dmn_acc += (tgt_dmn_acc - running_tgt_dmn_acc) / (batch_index + 1)
-            
+
             # valid print summary
             print(f"{config_args['model_id']} " # {config_args['model_id']}
                 f"Valid Ep [{epoch_index + 1:>2}/{num_epochs}][{batch_index + 1:>3}/{max_batches}] "
                 f"CLS L: {running_cls_loss:>1.5f} "
                 f"DP L: {running_dmn_loss:>1.5f} "
                 f"CLS ACC: {running_cls_acc:>3.2f} "
-                f"S-DP ACC: {running_src_dmn_acc:>3.2f} " 
-                f"T-DP ACC: {running_tgt_dmn_acc:>3.2f} "   
-                f"l: {_lambda:.3f}"  
+                f"S-DP ACC: {running_src_dmn_acc:>3.2f} "
+                f"T-DP ACC: {running_tgt_dmn_acc:>3.2f} "
+                f"l: {_lambda:.3f}"
                 )
 
             # compute balanced acc calc
@@ -541,7 +483,7 @@ try:
 
         src_cls_acc_ep = balanced_accuracy_score(y_src_true, y_src_pred)*100
         tgt_cls_acc_ep = balanced_accuracy_score(y_tgt_true, y_tgt_pred)*100
-        
+
         print(f"Summary Epoch num: [{epoch_index + 1:>2}/{num_epochs}]: "
               f"OVERALL CLS LOSS: {loss: 2.3f} "
               f"SRC CLS ACC: {src_cls_acc_ep:2.3f} "
@@ -566,10 +508,7 @@ try:
 
 except KeyboardInterrupt:
     print("Exiting loop")
-    
 
-
-# In[30]:
 
 
 for i, acc in enumerate(src_val_balanced_acc_scores):
@@ -580,8 +519,6 @@ print('Best epoch by balanced acc: {:.3f} epoch {}'.format(max(src_val_balanced_
     1 + np.argmax(src_val_balanced_acc_scores)))
 
 
-# In[31]:
-
 print()
 for i, acc in enumerate(tgt_val_balanced_acc_scores):
     print("Validation Acc {} {:.3f}".format(i+1, acc))
@@ -589,10 +526,3 @@ for i, acc in enumerate(tgt_val_balanced_acc_scores):
 
 print('Best epoch by balanced acc: {:.3f} epoch {}'.format(max(tgt_val_balanced_acc_scores),
     1 + np.argmax(tgt_val_balanced_acc_scores)))
-
-
-# In[ ]:
-
-
-
-

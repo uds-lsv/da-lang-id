@@ -233,7 +233,7 @@ class LID_Dataset(Dataset):
 
 ##### A METHOD TO GENERATE BATCHES
 def generate_batches(dataset, batch_size, shuffle=True,
-                     drop_last=True, device="cpu"):
+                     drop_last=False, device="cpu"):
     """
     A generator function which wraps the PyTorch DataLoader. It will
       ensure each tensor is on the write device location.
