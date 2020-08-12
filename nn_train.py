@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Training code based on code for the book NLP with PyTorch by Rao & McMahan
+# The code has been adapted to train on speech data
+# Author: Badr M. Abdullah @  LSV, LST department Saarland University
+# Follow me on Twitter @badr_nlp
 
 import os
 import yaml
@@ -52,7 +56,9 @@ def update_train_state(args, model, train_state):
         a new train_state
     """
     # save model
-    torch.save(model.state_dict(),         train_state['model_filename'] +         str(train_state['epoch_index'] + 1) + '.pth')
+    torch.save(model.state_dict(),
+        train_state['model_filename'] + \
+        str(train_state['epoch_index'] + 1) + '.pth')
 
     # save model after first epoch
     if train_state['epoch_index'] == 0:
@@ -75,7 +81,7 @@ def update_train_state(args, model, train_state):
             train_state['early_stopping_step'] = 0
 
         # Stop early ?
-        early_stop = train_state['early_stopping_step'] >=             args['training_hyperparams']['early_stopping_criteria']
+        early_stop = train_state['early_stopping_step'] >= args['training_hyperparams']['early_stopping_criteria']
 
         train_state['stop_early'] = early_stop
 
@@ -87,6 +93,7 @@ def compute_accuracy(y_pred, y_target):
     _, y_pred_indices = y_pred.max(dim=1)
     n_correct = torch.eq(y_pred_indices, y_target).sum().item()
     return n_correct / len(y_pred_indices) * 100
+
 
 def compute_binary_accuracy(y_pred, y_target):
     y_target = y_target.cpu().long()
@@ -105,15 +112,18 @@ def get_predictions(y_pred, y_target):
 
     return (true_labels, pred_labels)
 
+
 def set_seed_everywhere(seed, cuda):
     np.random.seed(seed)
     torch.manual_seed(seed)
     if cuda:
         torch.cuda.manual_seed_all(seed)
 
+
 def handle_dirs(dirpath):
     if not os.path.exists(dirpath):
         os.makedirs(dirpath)
+
 
 # obtain user input
 if len(sys.argv) != 2:
@@ -241,8 +251,8 @@ if config_args['model_arch']['nn_model'] == 'ConvNet_DA':
 
 
 # test model
-x_in = torch.rand(1, 13, 384)
-nn_LID_model_DA.forward(x_in)
+#x_in = torch.rand(1, 13, 384)
+#nn_LID_model_DA.forward(x_in)
 
 
 print(nn_LID_model_DA)
@@ -252,7 +262,7 @@ print(nn_LID_model_DA)
 loss_func_cls = nn.CrossEntropyLoss()
 loss_func_dmn  = nn.CrossEntropyLoss()
 
-optimizer = optim.Adam(nn_LID_model_DA.parameters(),     lr=config_args['training_hyperparams']['learning_rate'])
+optimizer = optim.Adam(nn_LID_model_DA.parameters(),lr=config_args['training_hyperparams']['learning_rate'])
 
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
                 mode='min', factor=0.5,

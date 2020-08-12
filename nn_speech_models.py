@@ -1,5 +1,11 @@
 # coding: utf-8
 
+# Vectorizer and data loader code are based on the code provided with
+# the book: NLP with PyTorch by Rao & McMahan
+# Vectorizer and models have been adapted to work with speech data
+# Author: Badr M. Abdullah @  LSV, LST department Saarland University
+# Follow me on Twitter @badr_nlp
+
 import numpy as np
 import random
 from sklearn  import preprocessing
@@ -274,7 +280,7 @@ class FrameDropout(nn.Module):
         return x_in
 
 
-##### A custome layer for frame dropout
+##### A custome layer for feature dropout
 class FeatureDropout(nn.Module):
     def __init__(self, dropout_prob=0.2, feature_idx=None):
         """Applies dropout on the feature level so feature accross vectors are
@@ -339,7 +345,7 @@ class FrameShuffle(nn.Module):
         return x_in
 
 
-##### A Convolutional model: Spoken Language Identifier
+##### A Convolutional model: Spoken Language ID model
 class ConvNet_LID(nn.Module):
     def __init__(self,
         feature_dim=14,
@@ -447,30 +453,30 @@ class ConvNet_LID(nn.Module):
             raise NotImplementedError
 
         # Fully conntected layers block
-        self.fc_layers = torch.nn.Sequential()
+        self.language_classifier = torch.nn.Sequential()
 
         if bottleneck:
             # Bottleneck layer
-            self.fc_layers.add_module("fc_bn",
+            self.language_classifier.add_module("fc_bn",
                 nn.Linear(num_channels[2], self.bottleneck_size))
-            self.fc_layers.add_module("relu_bn", nn.ReLU())
+            self.language_classifier.add_module("relu_bn", nn.ReLU())
 
             # then project to higher dim
-            self.fc_layers.add_module("fc2",
+            self.language_classifier.add_module("fc2",
                 nn.Linear(self.bottleneck_size, self.output_dim))
-            self.fc_layers.add_module("relu_fc2", nn.ReLU())
+            self.language_classifier.add_module("relu_fc2", nn.ReLU())
 
         else:
             # then project to two identical fc layers
-            #self.fc_layers.add_module("fc1", nn.Linear(512, 512))
-            #self.fc_layers.add_module("relu_fc1", nn.ReLU())
+            #self.language_classifier.add_module("fc1", nn.Linear(512, 512))
+            #self.language_classifier.add_module("relu_fc1", nn.ReLU())
 
-            self.fc_layers.add_module("fc2",
+            self.language_classifier.add_module("fc2",
                 nn.Linear(num_channels[2], self.output_dim))
-            self.fc_layers.add_module("relu_fc2", nn.ReLU())
+            self.language_classifier.add_module("relu_fc2", nn.ReLU())
 
         # Output fully connected --> softmax
-        self.fc_layers.add_module("y_out",
+        self.language_classifier.add_module("y_hat",
             nn.Linear(self.output_dim, num_classes))
 
 
@@ -512,53 +518,53 @@ class ConvNet_LID(nn.Module):
         if self.eval and frame_shuffle: x_in = self.frame_shuffle(x_in, shuffle_bag_size)
 
         # Convo block
-        z1 = self.ConvLayer1(x_in)
-        z2 = self.ConvLayer2(z1)
-        z3 = self.ConvLayer3(z2)
+        f = self.ConvLayer1(x_in)
+        f = self.ConvLayer2(f)
+        f = self.ConvLayer3(f)
 
         # max pooling
-        z4 = self.PoolLayer(z3).squeeze(dim=2)
+        f = self.PoolLayer(f).squeeze(dim=2)
 
-        # if we need to analyze bottle neck feature, go into this code block
+        # if we need to analyze bottleneck feature, go into this code block
         if return_bn:
-            feature_vector = z4
-            for _name, module in self.fc_layers._modules.items():
+            feature_vector = f
+            for _name, module in self.language_classifier._modules.items():
                 feature_vector = module(feature_vector)
 
                 if _name == 'relu_bn':
                     return feature_vector
 
-        else:
-            y_out = self.fc_layers(z4)
 
-            # softmax
-            if apply_softmax:
-                y_out = torch.softmax(y_out, dim=1)
+        y_hat = self.language_classifier(f)
 
-            return y_out
+        # softmax
+        if apply_softmax:
+            y_hat = torch.softmax(y_hat, dim=1)
+
+        return y_hat
 
 
 # Autograd Function objects are what record operation history on tensors,
 # and define formulas for the forward and backprop.
-class GradientReversalFn(Function):
+class GradientReversal(Function):
     @staticmethod
-    def forward(ctx, x, alpha):
+    def forward(ctx, x, _lambda):
         # Store context for backprop
-        ctx.alpha = alpha
+        ctx._lambda = _lambda
 
         # Forward pass is a no-op
         return x.view_as(x)
 
     @staticmethod
     def backward(ctx, grad_output):
-        # Backward pass is just to -alpha the gradient
-        output = grad_output.neg() * ctx.alpha
+        # Backward pass is just to -_lambda the gradient
+        output = grad_output.neg() * ctx._lambda
 
         # Must return same number as inputs to forward()
         return output, None
 
 
-##### A Convolutional model: Spoken Language Identifier
+##### DA-LID I: Spoken Language ID Model with Domain Adaptation [1]
 class ConvNet_LID_DA(nn.Module):
     def __init__(self,
         feature_dim=14,
@@ -676,13 +682,15 @@ class ConvNet_LID_DA(nn.Module):
         self.language_classifier.add_module("relu_fc2", nn.ReLU())
 
         # Output fully connected --> softmax
-        self.language_classifier.add_module("y_out",
+        self.language_classifier.add_module("y_hat",
             nn.Linear(self.output_dim, num_classes))
 
         self.domain_classifier = nn.Sequential(
-            nn.Linear(num_channels[2], 256), #nn.BatchNorm1d(100),
+            nn.Linear(num_channels[2], 1024),
             nn.ReLU(),
-            nn.Linear(256, 2)
+            nn.Linear(num_channels[2], 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 2)
         )
 
 
@@ -725,31 +733,242 @@ class ConvNet_LID_DA(nn.Module):
         if self.eval and frame_shuffle: x_in = self.frame_shuffle(x_in, shuffle_bag_size)
 
         # Convo block
-        z1 = self.ConvLayer1(x_in)
-        z2 = self.ConvLayer2(z1)
-        z3 = self.ConvLayer3(z2)
+        f = self.ConvLayer1(x_in)
+        f = self.ConvLayer2(f)
+        f = self.ConvLayer3(f)
 
         # max pooling
-        features = self.PoolLayer(z3).squeeze(dim=2)
+        f = self.PoolLayer(f).squeeze(dim=2)
 
         # if we need to analyze bottle neck feature, go into this code block
         # if return_bn:
-        #     feature_vector = features
+        #     feature_vector = f
         #     for _name, module in self.language_classifier._modules.items():
         #         feature_vector = module(feature_vector)
         #
         #         if _name == 'relu_bn':
         #             return feature_vector
 
-        # else:
 
-        reverse_features = GradientReversalFn.apply(features, grl_lambda)
+        reverse_f = GradientReversal.apply(f, grl_lambda)
 
-        class_pred = self.language_classifier(features)
-        domain_pred = self.domain_classifier(reverse_features)
+        y_hat = self.language_classifier(f)
+        d_hat = self.domain_classifier(reverse_f)
 
         # softmax
         if apply_softmax:
-            class_pred = torch.softmax(class_pred, dim=1)
+            y_hat = torch.softmax(y_hat, dim=1)
 
-        return class_pred, domain_pred # or torch.sigmoid()
+        return y_hat, d_hat
+
+
+##### DA-LID II: Spoken Language ID Model with Domain Adaptation [2]
+class ConvNet_LID_DA_2(nn.Module):
+    def __init__(self,
+        feature_dim=14,
+        num_classes=6,
+        bottleneck=False,
+        bottleneck_size=64,
+        signal_dropout_prob=0.2,
+        num_channels=[128, 256, 512],
+        filter_sizes=[5, 10, 10],
+        stride_steps=[1, 1, 1],
+        output_dim=512,
+        pooling_type='max',
+        dropout_frames=False,
+        dropout_features=False,
+        #unit_dropout_prob=0.5,
+        mask_signal=False):
+        """
+        Args:
+            feature_dim (int): size of the feature vector
+            num_classes (int): num of classes or size the softmax layer
+            bottleneck (bool): whether or not to have bottleneck layer
+            bottleneck_size (int): the dim of the bottleneck layer
+            signal_dropout_prob (float): signal dropout probability, either
+                frame drop or spectral feature drop
+            num_channels (list): number of channeös per each Conv layer
+            filter_sizes (list): size of filter/kernel per each Conv layer
+            stride_steps (list): strides per each Conv layer
+            pooling (str): pooling procedure, either 'max' or 'mean'
+            signal_masking (bool):  whether or no to mask signal during inference
+
+            Usage example:
+            model = ConvNet_LID(feature_dim=13,
+                num_classes=6,
+                bottleneck=False,
+                bottleneck_size=64,
+                signal_dropout_prob=0.2,
+                num_channels=[128, 256, 512],
+                filter_sizes=[5, 10, 10],
+                stride_steps=[1, 1, 1],
+                pooling_type='max',
+                mask_signal: False
+            )
+        """
+        super(ConvNet_LID_DA_2, self).__init__()
+        self.feature_dim = feature_dim
+        self.signal_dropout_prob = signal_dropout_prob
+        #self.unit_dropout_prob = unti_dropout_prob
+        self.pooling_type = pooling_type
+        self.bottleneck_size = bottleneck_size
+        self.output_dim = output_dim
+        self.dropout_frames = dropout_frames
+        self.dropout_features = dropout_features
+        self.mask_signal = mask_signal
+
+
+        # signal dropout_layer
+        if self.dropout_frames: # if frame dropout is enables
+            self.signal_dropout = FrameDropout(self.signal_dropout_prob)
+
+        elif self.dropout_features: # if frame dropout is enables
+            self.signal_dropout = FeatureDropout(self.signal_dropout_prob)
+
+        # frame reversal layer
+        self.frame_reverse = FrameReverse()
+
+        # frame reversal layer
+        self.frame_shuffle = FrameShuffle()
+
+        # Convolutional Block 1
+        self.ConvLayer1 = nn.Sequential(
+            nn.Conv1d(in_channels=self.feature_dim,
+                out_channels=num_channels[0],
+                kernel_size=filter_sizes[0],
+                stride=stride_steps[0]),
+            nn.BatchNorm1d(num_channels[0]),
+            nn.ReLU()
+        )
+
+        # Convolutional Block 2
+        self.ConvLayer2 = nn.Sequential(
+            nn.Conv1d(in_channels=num_channels[0],
+                out_channels=num_channels[1],
+                kernel_size=filter_sizes[1],
+                stride=stride_steps[1]),
+            nn.BatchNorm1d(num_channels[1]),
+            nn.ReLU()
+        )
+
+        # Convolutional Block 3
+        self.ConvLayer3 = nn.Sequential(
+            nn.Conv1d(in_channels=num_channels[1],
+                out_channels=num_channels[2],
+                kernel_size=filter_sizes[2],
+                stride=stride_steps[2]),
+            nn.BatchNorm1d(num_channels[2]),
+            nn.ReLU()
+        )
+
+        if self.pooling_type == 'max':
+            # NOTE: the MaxPool kernel size 362 was determined
+            # after examining the dataflow in the network and
+            # observing the resulting tensor shapes
+            self.PoolLayer = nn.MaxPool1d(kernel_size=362, stride=1)
+        else:
+            raise NotImplementedError
+
+        # Fully conntected layers block - Language classifier
+        self.fc_layer = torch.nn.Sequential()
+
+        self.fc_layer.add_module("fc1",
+            nn.Linear(num_channels[2], self.bottleneck_size))
+        self.fc_layer.add_module("relu_fc1", nn.ReLU())
+
+
+
+        self.language_classifier = torch.nn.Sequential()
+
+        self.language_classifier.add_module("fc2",
+            nn.Linear(self.bottleneck_size, self.output_dim))
+        self.language_classifier.add_module("relu_fc2", nn.ReLU())
+        #self.language_classifier.add_module("drop_fc2", nn.Dropout(self.unit_dropout_prob))
+
+        # Output fully connected --> softmax
+        self.language_classifier.add_module("y_out",
+            nn.Linear(self.output_dim, num_classes))
+
+        self.domain_classifier = nn.Sequential(
+            nn.Linear(num_channels[2], 1024), #nn.BatchNorm1d(100),
+            nn.ReLU(),
+            #nn.Dropout(self.unit_dropout_prob),
+            nn.Linear(1024, 1024), #nn.BatchNorm1d(100),
+            nn.ReLU(),
+            #nn.Dropout(self.unit_dropout_prob),
+            nn.Linear(1024, 2)
+        )
+
+
+    def forward(self,
+        x_in,
+        apply_softmax=False,
+        return_bn=False,
+        frame_dropout=False,
+        feature_dropout=False,
+        frame_reverse=False,
+        frame_shuffle=False,
+        shuffle_bag_size= 1,
+        grl_lambda=1.0
+    ):
+        """The forward pass of the classifier
+
+        Args:
+            x_in (torch.Tensor): an input data tensor.
+                x_in.shape should be (batch_size, feature_dim, dataset._max_frames)
+            apply_softmax (bool): a flag for the softmax activation
+                should be false if used with the cross-entropy losses
+        Returns:
+            the resulting tensor. tensor.shape should be (batch, )
+        """
+
+        # the feature representation x_in has to go through the following
+        # transformations: 3 Convo layers, 1 MaxPool layer, 3 FC, then softmax
+
+        # signal dropout, disabled when evaluating unless explicitly asked for
+        if self.training:
+            x_in = self.signal_dropout(x_in)
+
+
+        # signal masking during inference
+        if self.eval and self.mask_signal:
+            x_in = self.signal_dropout(x_in)
+
+        # signal distortion during inference
+        if self.eval and frame_reverse: x_in = self.frame_reverse(x_in)
+        if self.eval and frame_shuffle: x_in = self.frame_shuffle(x_in, shuffle_bag_size)
+
+        # Convo block
+        f = self.ConvLayer1(x_in)
+        f = self.ConvLayer2(f)
+        f = self.ConvLayer3(f)
+
+        # max pooling
+        f = self.PoolLayer(f).squeeze(dim=2)
+
+        # fc features
+        f = self.fc_layer(f)
+
+        #
+        # if we need to analyze bottle neck feature, go into this code block
+        if return_bn:
+            feature_vector = f
+
+            for _name, module in self.language_classifier._modules.items():
+                feature_vector = module(feature_vector)
+
+                if _name == 'relu_fc2':
+                    return feature_vector
+
+
+
+        reverse_f = GradientReversal.apply(f, grl_lambda)
+
+        y_hat = self.language_classifier(f)
+        d_hat = self.domain_classifier(reverse_f)
+
+        # softmax
+        if apply_softmax:
+            y_hat = torch.softmax(y_hat, dim=1)
+
+        return y_hat, d_hat
