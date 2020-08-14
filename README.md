@@ -1,7 +1,7 @@
 ## Cross-Domain Adaptation of Spoken Language Identification for Related Languages: The Curious Case of Slavic Languages
 
 
-**To appear in INTERSPEECH 2020 **
+**To appear in INTERSPEECH 2020**
 
 Badr M. Abdullah, Tania Avgustinova, Bernd Möbius, Dietrich Klakow
 
