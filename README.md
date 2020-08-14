@@ -3,7 +3,7 @@
 
 **To appear in INTERSPEECH 2020 **
 
-Badr Abdullah, Tania Avgustinova, Bernd Möbius, Dietrich Klakow
+Badr M. Abdullah, Tania Avgustinova, Bernd Möbius, Dietrich Klakow
 
 Department of Language Science and Technology
 
